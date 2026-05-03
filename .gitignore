@@ -26,8 +26,7 @@ sort_unzip.log
 *.cab
 *.iso
 
-# Personal wordlists
-my_guesses.txt
+# Personal wordlists (my_guesses.txt is committed as an example template -- edit locally without committing)
 rockyou.txt
 *.wordlist
 
