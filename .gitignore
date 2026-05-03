@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# crack_rar progress files
+crack_rar_checkpoint.json
+crack_rar_tried.txt
+
+# sort_unzip output
+*_sorted/
+sort_unzip.log
+
+# Test archives (don't commit real archives)
+*.rar
+*.zip
+*.7z
+*.tar
+*.gz
+*.bz2
+*.xz
+*.tgz
+*.cab
+*.iso
+
+# Personal wordlists
+my_guesses.txt
+rockyou.txt
+*.wordlist
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
