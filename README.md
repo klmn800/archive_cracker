@@ -19,9 +19,9 @@ Recovers forgotten passwords on your own encrypted archives. Uses a three-phase 
 
 ### The Three Phases
 
-**Phase 1 -- Personal guesses + variations**
+**Phase 1 -- Personal seed words + variations (`--words`)**
 
-You provide seed words (names, numbers, favorite words) and the tool generates ~1,500-2,000 variations per word:
+You provide seed words (names, numbers, favorite words) via `--words` and the tool generates ~1,500-2,000 variations per word:
 - Case variations: `fluffy`, `FLUFFY`, `Fluffy`
 - Number suffixes/prefixes: `fluffy1`, `fluffy99`, `fluffy2019`, `2019fluffy`
 - Leet speak: `flu$$y`
@@ -29,9 +29,9 @@ You provide seed words (names, numbers, favorite words) and the tool generates ~
 - Doubled: `fluffyfluffy`
 - Two-word combos (if multiple seeds): `fluffy2019`, `angus_fluffy`, `AngusFluffy`
 
-**Phase 2 -- Common passwords dictionary**
+**Phase 2 -- Common passwords + raw wordlist (`--wordlist`)**
 
-A built-in list of several hundred frequently-used passwords: `password`, `123456`, `qwerty`, all single characters, keyboard patterns, common names, etc.
+A built-in list of several hundred frequently-used passwords (`password`, `123456`, `qwerty`, single characters, keyboard patterns, common names, etc.), plus any external wordlist you supply with `--wordlist`. Wordlist entries are tried **as-is** -- the variation engine is not applied. This keeps large public lists like `rockyou.txt` (14M entries) usable without exploding into billions of candidates.
 
 **Phase 3 -- Brute-force**
 
@@ -47,14 +47,14 @@ Systematically tries every lowercase alphanumeric combination from 1 character u
 ### Usage
 
 ```bash
-# Personal guesses inline
+# Seed words inline -- variations applied (Phase 1)
 python crack_rar.py Documents.rar --words "angus,fluffy,2019,wedding"
 
-# Personal guesses from a text file (one word per line)
+# Raw wordlist file -- entries tried as-is (Phase 2)
 python crack_rar.py Documents.rar --wordlist my_guesses.txt
 
-# Both at once
-python crack_rar.py Documents.rar --wordlist my_guesses.txt --words "extra,words"
+# Both at once -- seeds run with variations in Phase 1, wordlist runs raw in Phase 2
+python crack_rar.py Documents.rar --words "angus,fluffy,2019" --wordlist rockyou.txt
 
 # Skip to a specific phase
 python crack_rar.py Documents.rar --phase 2
@@ -69,7 +69,7 @@ python crack_rar.py Documents.rar --words "cat,dog" --reset
 
 ### Wordlist File Format
 
-Plain text, one word per line. These are *seed words* -- the tool generates all the variations automatically. You don't need to write out `fluffy1`, `fluffy2`, etc.; just write `fluffy`.
+Plain text, one password per line. Entries are tried **exactly as written** -- no variation expansion. Use this for full passwords you want to test directly, or for large external wordlists like `rockyou.txt`.
 
 ```
 angus
@@ -79,6 +79,10 @@ wedding
 2222
 june
 ```
+
+A sample `my_guesses.txt` is committed to the repo as a placeholder -- replace it with your own entries, or point `--wordlist` somewhere else.
+
+If you want the tool to generate variations (e.g., `fluffy1`, `Fluffy2019`, `flu$$y`) from a small set of seed words, use `--words` instead -- that's what Phase 1 is for.
 
 ### Resume Support
 
@@ -94,8 +98,8 @@ Progress files are saved next to the archive and are automatically cleaned up wh
 
 | Flag | Description |
 |---|---|
-| `--wordlist`, `-w` | Path to a text file of seed words |
-| `--words` | Comma-separated seed words |
+| `--wordlist`, `-w` | Path to a wordlist file -- entries tried as-is (Phase 2) |
+| `--words` | Comma-separated seed words -- variations applied (Phase 1) |
 | `--phase` | Start from a specific phase (1, 2, or 3) |
 | `--brute-max` | Max length for brute-force (default: 5) |
 | `--reset` | Clear saved progress, start fresh |
@@ -158,9 +162,13 @@ python crack_rar.py Documents.rar --wordlist rockyou.txt --phase 2
 
 #### Important Notes on External Wordlists
 
-- Large wordlists are used as-is (one attempt per line). The variation engine from Phase 1 is **not** applied to wordlist entries -- that would turn 14 million into billions.
+- Wordlist entries are always tried as-is, one attempt per line. The variation engine from Phase 1 is **not** applied -- that would turn 14 million into billions. If you want variations on a small set of seed words, use `--words` instead.
 - The resume system works with external wordlists too. If you stop mid-run, already-tried passwords are skipped on restart.
 - These lists exist because of real data breaches. They're used legitimately by security researchers, penetration testers, and people recovering their own forgotten passwords. Use them responsibly.
+
+### A Note on Password Visibility
+
+Each candidate is passed to 7-Zip as a command-line argument (`-p<password>`). On Linux/macOS, command-line arguments are visible to other users on the system via `ps` or `/proc`, so during a long crack run any process on the box can read the passwords being attempted. This is a property of the 7-Zip backend (it doesn't accept passwords via stdin or env), not something this tool can avoid without switching backends. On Windows it's not an issue. For a tool you're running on your own machine to recover your own archive, this is generally fine -- but worth knowing if you're running it on a shared host.
 
 ---
 

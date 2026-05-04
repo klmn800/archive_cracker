@@ -3,8 +3,8 @@
 crack_rar.py - Password recovery tool for encrypted RAR archives.
 
 Three-phase approach:
-  Phase 1: User-provided guesses + automatic variations
-  Phase 2: Common password dictionary (built-in top ~5,000)
+  Phase 1: User-provided seed words + automatic variations (--words)
+  Phase 2: Common password dictionary + optional raw wordlist (--wordlist)
   Phase 3: Brute-force short alphanumeric strings (1-6 chars)
 
 Uses 7-Zip for password testing. No external dependencies.
@@ -516,17 +516,18 @@ examples:
     )
     parser.add_argument(
         "--wordlist", "-w", default=None,
-        help="Path to a text file with one password guess per line",
+        help="Path to a wordlist file (one password per line). "
+             "Entries are tried as-is in Phase 2. No variations applied.",
     )
     parser.add_argument(
         "--words", default=None,
-        help="Comma-separated list of personal guess words (e.g., "
-             "'cat,fluffy,birthday,2019')",
+        help="Comma-separated seed words for Phase 1 (variations applied). "
+             "Example: 'cat,fluffy,birthday,2019'",
     )
     parser.add_argument(
         "--phase", type=int, default=0, choices=[0, 1, 2, 3],
-        help="Start from a specific phase (0=all, 1=personal, 2=common, "
-             "3=brute-force)",
+        help="Start from a specific phase (0=all, 1=seeds+variations, "
+             "2=common+wordlist, 3=brute-force)",
     )
     parser.add_argument(
         "--brute-max", type=int, default=5,
@@ -573,26 +574,29 @@ def main() -> None:
         progress.reset()
         print("  Progress:   Reset (starting fresh)")
 
-    # Collect personal guesses
-    personal_words = []
-    if args.wordlist:
-        personal_words.extend(load_wordlist(args.wordlist))
-        print(f"  Wordlist:   {args.wordlist} ({len(personal_words)} words)")
+    # Collect inputs:
+    #   --words  -> seed_words, fed through the variation engine in Phase 1
+    #   --wordlist -> raw_wordlist, used as-is in Phase 2 (no variations)
+    seed_words = []
+    raw_wordlist = []
     if args.words:
-        personal_words.extend([w.strip() for w in args.words.split(",") if w.strip()])
+        seed_words.extend([w.strip() for w in args.words.split(",") if w.strip()])
+    if args.wordlist:
+        raw_wordlist.extend(load_wordlist(args.wordlist))
+        print(f"  Wordlist:   {args.wordlist} ({len(raw_wordlist):,} entries, used raw)")
 
     found = None
     start_phase = args.phase if args.phase > 0 else 1
 
-    # Phase 1: Personal guesses + variations
-    if start_phase <= 1 and personal_words and not progress.is_phase_done(1):
-        print(f"\n  Building variations from {len(personal_words)} personal words...")
+    # Phase 1: Personal seed words + variations
+    if start_phase <= 1 and seed_words and not progress.is_phase_done(1):
+        print(f"\n  Building variations from {len(seed_words)} seed words...")
         phase1 = []
-        for word in personal_words:
+        for word in seed_words:
             phase1.extend(generate_variations(word))
         # Also add two-word combos
-        if len(personal_words) > 1:
-            phase1.extend(generate_combo_variations(personal_words))
+        if len(seed_words) > 1:
+            phase1.extend(generate_combo_variations(seed_words))
         # Deduplicate
         seen = set()
         phase1_unique = []
@@ -606,11 +610,23 @@ def main() -> None:
     elif start_phase <= 1 and progress.is_phase_done(1):
         print("\n  Phase 1 already completed in a prior run. Skipping.")
 
-    # Phase 2: Common passwords
+    # Phase 2: Common passwords + raw wordlist (if provided), used as-is.
+    # The variation engine is intentionally NOT applied here -- a 14M-entry
+    # wordlist multiplied by ~1,500 variations would be ~20 billion candidates.
     if found is None and start_phase <= 2 and not progress.is_phase_done(2):
-        found = run_phase(str(archive), COMMON_PASSWORDS, seven_zip,
-                          "Phase 2: Common passwords dictionary",
-                          progress, phase_num=2)
+        phase2 = list(COMMON_PASSWORDS) + raw_wordlist
+        # Deduplicate while preserving order (built-in list first, wordlist after)
+        seen = set()
+        phase2_unique = []
+        for p in phase2:
+            if p not in seen:
+                seen.add(p)
+                phase2_unique.append(p)
+        label = "Phase 2: Common passwords"
+        if raw_wordlist:
+            label += f" + wordlist ({len(raw_wordlist):,} entries)"
+        found = run_phase(str(archive), phase2_unique, seven_zip,
+                          label, progress, phase_num=2)
     elif found is None and start_phase <= 2 and progress.is_phase_done(2):
         print("\n  Phase 2 already completed in a prior run. Skipping.")
 
